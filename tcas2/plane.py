@@ -82,12 +82,11 @@ class PlaneDummy(Plane):
         # new position
         knttoms = 0.514444
         range = self.gs * knttoms * dtime / 1000                                  # gs in knots to m/s * time in s to km
-        print(range)
         self.point = geopy.distance.distance(kilometers=range).destination(point=geopy.Point(latitude=self.lat, longitude=self.long), bearing=self.hdg)
         self.lat = self.point.latitude
         self.long = self.point.longitude
 
-        print(f"alt: {self.alt}, lat: {self.lat}, long: {self.long}, vs: {self.vs}, gs: {self.gs}")
+        # print(f"alt: {self.alt}, lat: {self.lat}, long: {self.long}, vs: {self.vs}, gs: {self.gs}")
 
 
 
