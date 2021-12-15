@@ -16,6 +16,7 @@ LATITUDE_KEY = "PLANE_LATITUDE"
 LONGITUDE_KEY = "PLANE_LONGITUDE"
 VERTICAL_SPEED_KEY = "VERTICAL_SPEED"
 GROUND_SPEED_KEY = "GROUND_VELOCITY"
+HEADING_KEY = "PLANE_HEADING_DEGREES_TRUE"
 
 feettometers = 0.3048
 
@@ -46,6 +47,7 @@ class Plane:
         self.long = self.aq.get(LONGITUDE_KEY)
         self.vs = self.aq.get(VERTICAL_SPEED_KEY)
         self.gs = self.aq.get(GROUND_SPEED_KEY)
+        self.hdg = self.aq.get(HEADING_KEY)
         self.point = geopy.Point(self.lat, self.long)
         #print(f"alt: {self.alt}, lat: {self.lat}, long: {self.long}, vs: {self.vs}, gs: {self.gs}")
 
@@ -85,6 +87,7 @@ class PlaneDummy(Plane):
         self.point = geopy.distance.distance(kilometers=range).destination(point=geopy.Point(latitude=self.lat, longitude=self.long), bearing=self.hdg)
         self.lat = self.point.latitude
         self.long = self.point.longitude
+        # self.hdg = (self.hdg + 10) % 360
 
         # print(f"alt: {self.alt}, lat: {self.lat}, long: {self.long}, vs: {self.vs}, gs: {self.gs}")
 

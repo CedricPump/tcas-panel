@@ -1,10 +1,18 @@
-import geopy
-import geopy.distance
+import math
 
-from geoUtils import get_bearing
+for i in [0, 45, 90, 135, 180, 270]:
 
-final = geopy.distance.distance(kilometers=5000).destination(point=geopy.Point(latitude=0, longitude=0), bearing=0)
+    bear = i
+    hdg = 90
 
-print(get_bearing(geopy.Point(53.80501925899087, 10.717892280311442), geopy.Point(53.83249016362793, 10.704628778867734)))
+    relBear = (360 + bear - hdg) % 360
+    # relBear = i
 
-print(final)
+    bearInRad = relBear * math.pi / 180
+
+    x = (1 * math.sin(bearInRad))
+    y = (1 * math.cos(bearInRad))
+
+    print(f"{i} {relBear} {bearInRad} {x:2f} {y:2f}")
+
+
