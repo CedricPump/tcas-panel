@@ -1,5 +1,4 @@
 import time
-
 import paho.mqtt.client as mqtt
 
 MQTT_TCAS_HOST = "localhost"
@@ -17,6 +16,7 @@ def on_connect(client, userdata, flags, rc):
 def on_message(client, userdata, msg):
     print(msg.topic+" "+str(msg.payload))
 
+
 client = mqtt.Client()
 client.on_connect = on_connect
 client.on_message = on_message
@@ -28,12 +28,7 @@ client.connect(MQTT_TCAS_HOST, 1883, 60)
 # Other loop*() functions are available that give a threaded interface and a
 # manual interface.
 
-
-
 while True:
     time.sleep(0.5)
     string = '{"mode": "BROADCAST", "address": "ef542760-4715-40b1-abc4-349b881ef7c2", "type": "SHORT_SQUITTER", "data": {"alt": 5400.0, "lat": 53.805747173744344, "long": 10.714933253660258, "vs": 0.0, "gs": 140.0}}'
     client.publish("cedricpump.de/thluebeck/tcas", payload=string, qos=0, retain=False)
-
-
-# client.loop_forever()

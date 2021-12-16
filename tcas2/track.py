@@ -1,5 +1,5 @@
 from threading import Thread
-from PyAstronomy import pyasl
+
 import time
 import plane
 

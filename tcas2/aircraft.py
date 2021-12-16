@@ -1,7 +1,5 @@
 from enum import Enum
 
-import tcas
-
 
 class AircraftCategory(Enum):
     OTHER = 0
@@ -49,7 +47,6 @@ class Aircraft:
         if dt != 0:
             self.rangeRate = (prevRecord.get("distance") - lastRecord.get("distance")) / dt
             self.verticalRate = (prevRecord.get("verticalSeparation") - lastRecord.get("verticalSeparation")) / dt
-
 
     def getLastDistance(self):
         return self.history[len(self.history)-1].get("distance")

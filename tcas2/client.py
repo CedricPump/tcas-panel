@@ -1,5 +1,3 @@
-import json
-
 import plane
 from ui import UI
 import argparse

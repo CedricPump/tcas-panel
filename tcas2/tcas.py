@@ -1,18 +1,15 @@
 import collections
 import json
-import math
 import time
 import uuid
 from enum import Enum
 from threading import Thread
-
 import geopy
 import geopy.distance
 import paho.mqtt.client as mqtt
-
 import plane
 from aircraft import Aircraft, AircraftCategory, Advisory
-from geoUtils import get_bearing
+from geoUtils import getBearing
 
 abort = False
 MQTT_TCAS_HOST = "localhost"
@@ -43,6 +40,7 @@ class MessageType(Enum):
     RESOLUTION_REQUEST = 3
     RESOLUTION_RESPONSE = 4
 
+
 class AdvisoryType(Enum):
     NONE = 0
     TA = 1
@@ -66,6 +64,11 @@ TcasThresholds = {
 }
 
 
+TCAS_RA_CLIMB_INHIBITED_ALTITUDE = 4800
+TCAS_RA_INC_DESC_INHIBITED_ALTITUDE = 1500
+TCAS_RA_DESC_INHIBITED_ALTITUDE = 11000
+TCAS_TA_ONLY_ALTITUDE = 1000
+TCAS_TA_NO_AURAL = 500
 
 
 class Tcas(Thread):
@@ -86,21 +89,6 @@ class Tcas(Thread):
         self.maxRange = 0  # nm
         self.transmitInterval = 1  # sec
         self.aircraftIdentification = f"{uuid.uuid4()}"
-
-        # hight readout 25 ft increments
-        # displayed to controller in 100 ft
-
-        # modes:
-        # AllCall (interogateion of Mode S)
-        # Broadcast (no response)
-        # Selective (selction by identification)
-        # Interogate (Mode A and C respond with 4096 Codes)
-
-        # Cathegories: OTHER, PROXIMATE, TA, RA
-        # attribute of aircraft: vertical seperation, range, vertical rate, range rate
-
-        # TAU = disance / v_own + v_intruder
-        #
 
     @staticmethod
     def stop():
@@ -189,7 +177,7 @@ class Tcas(Thread):
         lastPos = self.ownPlane.point
         otherPlanePos = geopy.Point(message.get('data').get('lat'), message.get('data').get('long'))
         distance = geopy.distance.distance(lastPos, otherPlanePos).m
-        bearing = get_bearing(lastPos, otherPlanePos)
+        bearing = getBearing(lastPos, otherPlanePos)
         otherPlaneALt = message.get('data').get('alt')
         verticalSeparation = self.ownPlane.alt - otherPlaneALt
         print(f"dist: {distance * METERS_TO_NM} NMi, bear: {bearing} deg, vSep: {verticalSeparation} ft")
@@ -216,6 +204,7 @@ class Tcas(Thread):
 
         # If rates are known calculate TAU and CPA
         if aircraft.rangeRate is not None:
+            noRA = self.ownPlane.alt_agl < TCAS_TA_ONLY_ALTITUDE
 
             print(
                 f"rangeRate: {round(aircraft.rangeRate * 100) / 100} m/s, vert.Rate: {round(aircraft.verticalRate * 100) / 100} ft/s")
@@ -223,8 +212,6 @@ class Tcas(Thread):
             tau = distance / abs(aircraft.rangeRate)
             vSepMin = abs(verticalSeparation + aircraft.verticalRate * tau)
             oldAircraftType = aircraft.type
-
-
 
             tcasThreshold = self.getTcasThreshold()
 
@@ -239,13 +226,14 @@ class Tcas(Thread):
                 if aircraft.advisory is None:
                     aircraft.advisory = Advisory(AdvisoryType.TA)
 
-            if (tau < tcasThreshold.get("RA_TAU") and vSepMin < tcasThreshold.get("RA_ZTHR")) or (
-                    abs(verticalSeparation) < tcasThreshold.get("RA_ZTHR") and distance < tcasThreshold.get("RA_DMOD")):
-                aircraft.type = AircraftCategory.RA
-                if aircraft.advisory is None:
-                    aircraft.advisory = Advisory(AdvisoryType.RA)
-                elif aircraft.advisory.type == AdvisoryType.TA:
-                    aircraft.advisory = Advisory(AdvisoryType.RA)
+            if not noRA:
+                if (tau < tcasThreshold.get("RA_TAU") and vSepMin < tcasThreshold.get("RA_ZTHR")) or (
+                        abs(verticalSeparation) < tcasThreshold.get("RA_ZTHR") and distance < tcasThreshold.get("RA_DMOD")):
+                    aircraft.type = AircraftCategory.RA
+                    if aircraft.advisory is None:
+                        aircraft.advisory = Advisory(AdvisoryType.RA)
+                    elif aircraft.advisory.type == AdvisoryType.TA:
+                        aircraft.advisory = Advisory(AdvisoryType.RA)
 
             if oldAircraftType == AircraftCategory.OTHER or oldAircraftType == AircraftCategory.PROXIMATE:
                 if oldAircraftType == AircraftCategory.RA or oldAircraftType == AircraftCategory.TA:
@@ -274,23 +262,31 @@ class Tcas(Thread):
             self.knownAircrafts.pop(i)
 
     def findResolution(self, aircraft):
+        raNoClimb = self.ownPlane.alt > TCAS_RA_CLIMB_INHIBITED_ALTITUDE
+        raNoIncDesc = self.ownPlane.alt_agl < TCAS_RA_INC_DESC_INHIBITED_ALTITUDE
+        raNoDesc = self.ownPlane.alt_agl < TCAS_RA_DESC_INHIBITED_ALTITUDE
+
         vsPlus = 0  # in ft/min
         distance = aircraft.getLastDistance()
         verticalSeparation = aircraft.getLatvSep()
         tau = distance / abs(aircraft.rangeRate)
         tcasThreshold = self.getTcasThreshold()
 
+        # check increase vs
         resultsUp = collections.OrderedDict()
-        for vsPlus in range(0, VS_MAX, 100):
-            vSepMin = abs(verticalSeparation + (aircraft.verticalRate + vsPlus / 60) * tau)  # to ft/sec
-            if vSepMin > tcasThreshold.get("TA_ZTHR"):
-                resultsUp[vSepMin] = vsPlus
+        if not raNoClimb:
+            for vsPlus in range(0, VS_MAX, 100):
+                vSepMin = abs(verticalSeparation + (aircraft.verticalRate + vsPlus / 60) * tau)  # to ft/sec
+                if vSepMin > tcasThreshold.get("TA_ZTHR"):
+                    resultsUp[vSepMin] = vsPlus
 
+        # check increase vs
         resultsDown = collections.OrderedDict()
-        for vsPlus in range(VS_MIN, 0, 100):
-            vSepMin = abs(verticalSeparation + (aircraft.verticalRate + vsPlus / 60) * tau)  # to ft/sec
-            if vSepMin > tcasThreshold.get("TA_ZTHR"):
-                resultsDown[vSepMin] = vsPlus
+        if not raNoDesc or not raNoIncDesc:
+            for vsPlus in range(VS_MIN, 0, 100):
+                vSepMin = abs(verticalSeparation + (aircraft.verticalRate + vsPlus / 60) * tau)  # to ft/sec
+                if vSepMin > tcasThreshold.get("TA_ZTHR"):
+                    resultsDown[vSepMin] = vsPlus
 
         print(resultsUp)
         print(resultsDown)

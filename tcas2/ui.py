@@ -1,14 +1,9 @@
-import asyncio
 import math
-
 import tkinter as tk
 from threading import Thread
-import plane
 import tcas
 from aircraft import AircraftCategory, Advisory
-from plane import *
 from tcas import Tcas
-from track import Tracker
 
 UI_SIZE = 500
 UI_DISPLAY_RANGE = tcas.TCAS_MAX_DISTANCE  # km
@@ -135,23 +130,23 @@ class UI(Thread):
                     icon = self.canvas.create_line(x+13, y+8, x+13, y-8, arrow=arrow, fill=labalcolor)
                     self.aircraftIcons.append(icon)
 
-
-
-
-
     def clearAircraftDisplay(self):
         for icon in self.aircraftIcons:
             self.canvas.delete(icon)
         self.aircraftIcons = []
 
     def displayTARA(self, adv):
+        noTAAural = True
+        if self.tcas is not None:
+            noTAAural = self.tcas.ownPlane.alt_agl < tcas.TCAS_TA_NO_AURAL
         if adv is None:
             return
         color = "black"
         text = ""
         if adv.type == tcas.AdvisoryType.TA:
-            color = "yellow"
-            text = "TRAFFIC TRAFFIC"
+            if not noTAAural:
+                color = "orange"
+                text = "TRAFFIC TRAFFIC"
         if adv.type == tcas.AdvisoryType.RA:
             color = "red"
             text = adv.alert

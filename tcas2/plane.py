@@ -1,8 +1,3 @@
-import asyncio
-import datetime
-import json
-import threading
-
 import geopy
 import geopy.distance
 import time
@@ -12,6 +7,7 @@ import time
 from SimConnect import *
 
 ALTITUDE_KEY = "PLANE_ALTITUDE"
+ALTITUDE_AGL_KEY = "PLANE_ALT_ABOVE_GROUND"
 LATITUDE_KEY = "PLANE_LATITUDE"
 LONGITUDE_KEY = "PLANE_LONGITUDE"
 VERTICAL_SPEED_KEY = "VERTICAL_SPEED"
@@ -27,6 +23,7 @@ class Plane:
         self.aq = None
         self._isTracking = False
         self.alt = 0.0
+        self.alt_agl = 0.0
         self.lat = 0.0
         self.long = 0.0
         self.hdg = 0.0
@@ -43,16 +40,17 @@ class Plane:
             self.connect()
 
         self.alt = self.aq.get(ALTITUDE_KEY)
+        self.alt_agl = self.aq.get(ALTITUDE_AGL_KEY)
         self.lat = self.aq.get(LATITUDE_KEY)
         self.long = self.aq.get(LONGITUDE_KEY)
         self.vs = self.aq.get(VERTICAL_SPEED_KEY)
         self.gs = self.aq.get(GROUND_SPEED_KEY)
         self.hdg = self.aq.get(HEADING_KEY) / 6.28319 * 360
         self.point = geopy.Point(self.lat, self.long)
-        print(f"alt: {self.alt}, lat: {self.lat}, long: {self.long}, vs: {self.vs}, gs: {self.gs}, hdg: {self.hdg}")
+        print(f"alt: {self.alt}, agl: {self.alt_agl}, lat: {self.lat}, long: {self.long}, vs: {self.vs}, gs: {self.gs}, hdg: {self.hdg}")
 
     def getAsDict(self):
-        return {"alt": self.alt, "lat": self.lat, "long": self.long, "vs": self.vs, "gs": self.gs, "hdg": self.hdg}
+        return {"alt": self.alt, "agl": self.alt_aglm, "lat": self.lat, "long": self.long, "vs": self.vs, "gs": self.gs, "hdg": self.hdg}
 
 
 
@@ -64,6 +62,7 @@ class PlaneDummy(Plane):
 
     def setPos(self, alt, lat, long, vs, gs, hdg):
         self.alt = alt
+        self.alt_agl = alt
         self.lat = lat
         self.long = long
         self.hdg = hdg
@@ -81,6 +80,7 @@ class PlaneDummy(Plane):
         self.lastTime = time.monotonic()
         # altitude
         self.alt = self.alt + self.vs * dtime / 60                                              # ft + ft/min * sec / 60
+        self.alt_aglm = self.alt
         # new position
         knttoms = 0.514444
         range = self.gs * knttoms * dtime / 1000                                  # gs in knots to m/s * time in s to km
