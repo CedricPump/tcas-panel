@@ -47,12 +47,12 @@ class Plane:
         self.long = self.aq.get(LONGITUDE_KEY)
         self.vs = self.aq.get(VERTICAL_SPEED_KEY)
         self.gs = self.aq.get(GROUND_SPEED_KEY)
-        self.hdg = self.aq.get(HEADING_KEY)
+        self.hdg = self.aq.get(HEADING_KEY) / 6.28319 * 360
         self.point = geopy.Point(self.lat, self.long)
-        #print(f"alt: {self.alt}, lat: {self.lat}, long: {self.long}, vs: {self.vs}, gs: {self.gs}")
+        print(f"alt: {self.alt}, lat: {self.lat}, long: {self.long}, vs: {self.vs}, gs: {self.gs}, hdg: {self.hdg}")
 
     def getAsDict(self):
-        return {"alt": self.alt, "lat": self.lat, "long": self.long, "vs": self.vs, "gs": self.gs}
+        return {"alt": self.alt, "lat": self.lat, "long": self.long, "vs": self.vs, "gs": self.gs, "hdg": self.hdg}
 
 
 

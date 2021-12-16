@@ -257,8 +257,9 @@ class Tcas(Thread):
                 f"Pos: {otherPlanePos} Alt: {round(otherPlaneALt)} ft, Dist: {round(distance * METERS_TO_NM * 100) / 100}, Bearing: {round(bearing)} deg, vertSep: {round(verticalSeparation)} ft, rangeRate: {round(aircraft.rangeRate * 100) / 100} m/s, vert.Rate: {round(aircraft.verticalRate * 100) / 100} ft/s, tau: {round(tau * 100) / 100} s, vSepMin: {round(vSepMin)} ft")
 
             if aircraft.type == AircraftCategory.RA:
-                if not aircraft.advisory.isSend:
-                    self.findResolution(aircraft)
+                if aircraft.advisory is not None:
+                    if not aircraft.advisory.isSend:
+                        self.findResolution(aircraft)
             # TODO tau is 0 Why?
 
     def checkAircraftTimout(self):
