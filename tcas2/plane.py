@@ -1,9 +1,8 @@
+from enum import Enum
+
 import geopy
 import geopy.distance
 import time
-
-
-
 from SimConnect import *
 
 ALTITUDE_KEY = "PLANE_ALTITUDE"
@@ -16,9 +15,18 @@ HEADING_KEY = "PLANE_HEADING_DEGREES_TRUE"
 
 feettometers = 0.3048
 
+
+class Transponder(Enum):
+    ModeA = 0
+    ModeC = 1
+    ModeS = 2
+
+
+
 class Plane:
 
     def __init__(self):
+        self.transponder = Transponder.ModeS
         self.sm = None
         self.aq = None
         self._isTracking = False
@@ -47,10 +55,10 @@ class Plane:
         self.gs = self.aq.get(GROUND_SPEED_KEY)
         self.hdg = self.aq.get(HEADING_KEY) / 6.28319 * 360
         self.point = geopy.Point(self.lat, self.long)
-        print(f"alt: {self.alt}, agl: {self.alt_agl}, lat: {self.lat}, long: {self.long}, vs: {self.vs}, gs: {self.gs}, hdg: {self.hdg}")
+        # print(f"alt: {self.alt}, agl: {self.alt_agl}, lat: {self.lat}, long: {self.long}, vs: {self.vs}, gs: {self.gs}, hdg: {self.hdg}")
 
     def getAsDict(self):
-        return {"alt": self.alt, "agl": self.alt_aglm, "lat": self.lat, "long": self.long, "vs": self.vs, "gs": self.gs, "hdg": self.hdg}
+        return {"alt": self.alt, "agl": self.alt_agl, "lat": self.lat, "long": self.long, "vs": self.vs, "gs": self.gs, "hdg": self.hdg}
 
 
 
@@ -80,7 +88,7 @@ class PlaneDummy(Plane):
         self.lastTime = time.monotonic()
         # altitude
         self.alt = self.alt + self.vs * dtime / 60                                              # ft + ft/min * sec / 60
-        self.alt_aglm = self.alt
+        self.alt_agl = self.alt
         # new position
         knttoms = 0.514444
         range = self.gs * knttoms * dtime / 1000                                  # gs in knots to m/s * time in s to km

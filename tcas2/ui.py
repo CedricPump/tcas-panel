@@ -31,7 +31,7 @@ class UI(Thread):
         self.canvas.create_oval(0 + UI_SIZE * 1 / 6, 0 + UI_SIZE * 1 / 6, 0 + UI_SIZE * 5 / 6, 0 + UI_SIZE * 5 / 6, outline="grey", width=1)
         self.canvas.create_oval(0 + UI_SIZE * 2 / 6, 0 + UI_SIZE * 2 / 6, 0 + UI_SIZE * 4 / 6, 0 + UI_SIZE * 4 / 6, outline="grey", width=1)
         self.gpsLabel = tk.Label(self.root, width=UI_SIZE, text="")
-        self.taraLabel = tk.Label(self.root, width=UI_SIZE, text="", fg="black")
+        self.taraLabel = tk.Label(self.root, width=UI_SIZE, text="", fg="black", font='Helvetica 18 bold')
         self.startButton = tk.Button(self.root, width=UI_SIZE, height=40, text="Start", command=self.onClick)
         self.updateDisplay()
         self.displayVSScale()
@@ -42,7 +42,6 @@ class UI(Thread):
         self.startButton.pack()
 
     def onClick(self):
-        print(f"on Click: {self.started}")
         if not self.started:
             self.tcas = Tcas(self, self.useDummy)
             if self.useDummy:
@@ -89,7 +88,6 @@ class UI(Thread):
                 xy = self.getPointDistAndBear(dist=dist, bear=bear)
                 x = xy[0]
                 y = xy[1]
-                print(f"x: {x}, y: {y}")
 
                 icon = None
                 if aircraft.type == AircraftCategory.OTHER:
@@ -139,20 +137,19 @@ class UI(Thread):
         noTAAural = True
         if self.tcas is not None:
             noTAAural = self.tcas.ownPlane.alt_agl < tcas.TCAS_TA_NO_AURAL
-        if adv is None:
-            return
         color = "black"
         text = ""
-        if adv.type == tcas.AdvisoryType.TA:
-            if not noTAAural:
-                color = "orange"
-                text = "TRAFFIC TRAFFIC"
-        if adv.type == tcas.AdvisoryType.RA:
-            color = "red"
-            text = adv.alert
-        if adv.type == tcas.AdvisoryType.CC:
-            color = "blue"
-            text = "CLEAR OF CONFLICT"
+        if adv is not None:
+            if adv.type == tcas.AdvisoryType.TA:
+                if not noTAAural:
+                    color = "orange"
+                    text = "TRAFFIC TRAFFIC"
+            if adv.type == tcas.AdvisoryType.RA:
+                color = "red"
+                text = adv.alert
+            if adv.type == tcas.AdvisoryType.CC:
+                color = "blue"
+                text = "CLEAR OF CONFLICT"
 
         self.taraLabel["text"] = text
         self.taraLabel.configure(fg=color)

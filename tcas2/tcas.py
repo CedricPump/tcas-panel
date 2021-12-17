@@ -104,7 +104,7 @@ class Tcas(Thread):
             self.client.on_message = self.on_message
             self.client.connect("localhost", 1883, 60)
             self.client.loop_start()
-            self.startAquisitionBroadcast()
+            self.startAquisitionBroadcastLoop()
         except ConnectionError:
             self.ui.popup("Sim not running")
             abort = True
@@ -123,7 +123,21 @@ class Tcas(Thread):
         self.client.publish(f"{MQTT_TCAS_CHANNEL}/{self.aircraftIdentification}", payload=message, qos=0, retain=False)
         self.ui.updateLabel(
             f"GPS: {geopy.Point(latitude=self.ownPlane.lat, longitude=self.ownPlane.long)} ALT: {round(self.ownPlane.alt)} ft VS: {round(self.ownPlane.vs)} ft/min GS: {round(self.ownPlane.gs)} knt HDG: {round(self.ownPlane.hdg)}")
-        print("out")
+
+    def sendLongSquitter(self, aircraft=None):
+        self.ownPlane.update()
+        if aircraft is None:
+            self.ownPlane.update()
+            message = json.dumps({"mode": MessageMode.BROADCAST.name, "address": f"{self.aircraftIdentification}",
+                                  "type": MessageType.LONG_SQUITTER.name,
+                                  "data": self.ownPlane.getAsDict()})
+            self.client.publish(f"{MQTT_TCAS_CHANNEL}/{self.aircraftIdentification}", payload=message, qos=0, retain=False)
+        else:
+            message = json.dumps({"mode": MessageMode.SELECTIVE.name, "address": f"{self.aircraftIdentification}",
+                                  "receiver": f"{aircraft.identification}",
+                                  "type": MessageType.LONG_SQUITTER.name,
+                                  "data": self.ownPlane.getAsDict()})
+            self.client.publish(f"{MQTT_TCAS_CHANNEL}/{self.aircraftIdentification}", payload=message, qos=0, retain=False)
 
     def sendResolutionRequest(self, aircraft):
         message = json.dumps({"mode": MessageMode.SELECTIVE.name, "address": f"{self.aircraftIdentification}",
@@ -141,13 +155,14 @@ class Tcas(Thread):
         self.client.publish(f"{MQTT_TCAS_CHANNEL}/{self.aircraftIdentification}", payload=message, qos=0, retain=False)
         print(f"Sent RESOLUTION_RESPONSE to {aircraft.identification}: accept: {accept}")
 
-    def startAquisitionBroadcast(self):
+    def startAquisitionBroadcastLoop(self):
         while not abort:
             self.ui.displayAircraft()
             self.ui.updateDisplay()
             self.sendShortSquitter()
             self.checkAircraftTimout()
             self.ui.checkAdvisoryLevel()
+            self.interogate()
             time.sleep(1)
 
         self.client.disconnect()
@@ -163,7 +178,7 @@ class Tcas(Thread):
         if message.get('address') == self.aircraftIdentification:
             return
 
-        print(msg.topic + " " + str(msg.payload))
+        # print(msg.topic + " " + str(msg.payload))
 
         if message.get('mode') == MessageMode.BROADCAST.name:
             self.listenToSquitter(message)
@@ -180,7 +195,7 @@ class Tcas(Thread):
         bearing = getBearing(lastPos, otherPlanePos)
         otherPlaneALt = message.get('data').get('alt')
         verticalSeparation = self.ownPlane.alt - otherPlaneALt
-        print(f"dist: {distance * METERS_TO_NM} NMi, bear: {bearing} deg, vSep: {verticalSeparation} ft")
+        # print(f"dist: {distance * METERS_TO_NM} NMi, bear: {bearing} deg, vSep: {verticalSeparation} ft")
 
         # check if out of range
         if distance > TCAS_MAX_DISTANCE or abs(verticalSeparation) > TCAS_MAX_VERTICAL_SEPARATION:
@@ -197,7 +212,7 @@ class Tcas(Thread):
         aircraft.saveEntry({"time": time.monotonic(), "distance": distance, "bearing": bearing,
                             "verticalSeparation": verticalSeparation})
         self.knownAircrafts[address] = aircraft
-        print(aircraft.history)
+        # print(aircraft.history)
 
         tau = 0
         vSepMin = 0
@@ -206,8 +221,7 @@ class Tcas(Thread):
         if aircraft.rangeRate is not None:
             noRA = self.ownPlane.alt_agl < TCAS_TA_ONLY_ALTITUDE
 
-            print(
-                f"rangeRate: {round(aircraft.rangeRate * 100) / 100} m/s, vert.Rate: {round(aircraft.verticalRate * 100) / 100} ft/s")
+            # print(f"rangeRate: {round(aircraft.rangeRate * 100) / 100} m/s, vert.Rate: {round(aircraft.verticalRate * 100) / 100} ft/s")
 
             tau = distance / abs(aircraft.rangeRate)
             vSepMin = abs(verticalSeparation + aircraft.verticalRate * tau)
@@ -220,14 +234,14 @@ class Tcas(Thread):
             else:
                 aircraft.type = AircraftCategory.OTHER
 
-            if (tau < tcasThreshold.get("TA_TAU") and vSepMin < tcasThreshold.get("TA_ZTHR")) or (
-                    abs(verticalSeparation) < tcasThreshold.get("TA_ZTHR") and distance < tcasThreshold.get("RA_DMOD")):
+            if aircraft.rangeRate <= 0 and ((tau < tcasThreshold.get("TA_TAU") and vSepMin < tcasThreshold.get("TA_ZTHR")) or (
+                    abs(verticalSeparation) < tcasThreshold.get("TA_ZTHR") and distance < tcasThreshold.get("RA_DMOD"))):
                 aircraft.type = AircraftCategory.TA
                 if aircraft.advisory is None:
                     aircraft.advisory = Advisory(AdvisoryType.TA)
 
             if not noRA:
-                if (tau < tcasThreshold.get("RA_TAU") and vSepMin < tcasThreshold.get("RA_ZTHR")) or (
+                if aircraft.rangeRate <= 0 and (tau < tcasThreshold.get("RA_TAU") and vSepMin < tcasThreshold.get("RA_ZTHR")) or (
                         abs(verticalSeparation) < tcasThreshold.get("RA_ZTHR") and distance < tcasThreshold.get("RA_DMOD")):
                     aircraft.type = AircraftCategory.RA
                     if aircraft.advisory is None:
@@ -235,14 +249,16 @@ class Tcas(Thread):
                     elif aircraft.advisory.type == AdvisoryType.TA:
                         aircraft.advisory = Advisory(AdvisoryType.RA)
 
-            if oldAircraftType == AircraftCategory.OTHER or oldAircraftType == AircraftCategory.PROXIMATE:
+            if aircraft.type == AircraftCategory.OTHER or aircraft.type == AircraftCategory.PROXIMATE:
                 if oldAircraftType == AircraftCategory.RA or oldAircraftType == AircraftCategory.TA:
                     aircraft.advisory = Advisory(AdvisoryType.CC)
                 else:
                     aircraft.advisory = None
+            adv = None
+            if aircraft.advisory is not None:
+                adv = aircraft.advisory.type
 
-            print(
-                f"Pos: {otherPlanePos} Alt: {round(otherPlaneALt)} ft, Dist: {round(distance * METERS_TO_NM * 100) / 100}, Bearing: {round(bearing)} deg, vertSep: {round(verticalSeparation)} ft, rangeRate: {round(aircraft.rangeRate * 100) / 100} m/s, vert.Rate: {round(aircraft.verticalRate * 100) / 100} ft/s, tau: {round(tau * 100) / 100} s, vSepMin: {round(vSepMin)} ft")
+            print(f"{aircraft.type}: old: {oldAircraftType} adv: {adv}, Dist: {round(distance * METERS_TO_NM * 100) / 100}, vertSep: {round(verticalSeparation)} ft, rangeRate: {round(aircraft.rangeRate * 100) / 100} m/s, vert.Rate: {round(aircraft.verticalRate * 100) / 100} ft/s, tau: {round(tau * 100) / 100} s, vSepMin: {round(vSepMin)} ft")
 
             if aircraft.type == AircraftCategory.RA:
                 if aircraft.advisory is not None:
@@ -288,8 +304,8 @@ class Tcas(Thread):
                 if vSepMin > tcasThreshold.get("TA_ZTHR"):
                     resultsDown[vSepMin] = vsPlus
 
-        print(resultsUp)
-        print(resultsDown)
+        # print(resultsUp)
+        # print(resultsDown)
 
         if len(resultsUp) == 0:
             resultsUp[0] = 0
@@ -312,9 +328,9 @@ class Tcas(Thread):
             aircraft.advisory.alert = "DESCEND, DESCEND"
             opponentAlert = "CLIMB, CLIMB"
 
-        print(tcasThreshold.get("TA_ZTHR"))
-        print(f"{aircraft.advisory.minimalVerticalSpeed}: {list(resultsUp.keys())[len(resultsUp)-1]}")
-        print(f"{aircraft.advisory.maximalVerticalSpeed}: {list(resultsUp.keys())[0]}")
+        # print(tcasThreshold.get("TA_ZTHR"))
+        # print(f"{aircraft.advisory.minimalVerticalSpeed}: {list(resultsUp.keys())[len(resultsUp)-1]}")
+        # print(f"{aircraft.advisory.maximalVerticalSpeed}: {list(resultsUp.keys())[0]}")
 
         aircraft.advisory.opponentSolution = {"alert": opponentAlert, "minimalVerticalSpeed": opponentMinVS, "maximalVerticalSpeed": opponentMaxVS}
         self.sendResolutionRequest(aircraft)
@@ -324,7 +340,7 @@ class Tcas(Thread):
         if message.get("type") == MessageType.RESOLUTION_REQUEST.name:
             data = message.get("data")
             aircraft = self.knownAircrafts[message.get('address')]  # type: Aircraft
-            print(f"Received RESOLUTION_REQUEST from {aircraft.identification}: {data}")
+            # print(f"Received RESOLUTION_REQUEST from {aircraft.identification}: {data}")
             if aircraft.type is not AircraftCategory.RA:
                 self.checkResolutionRequest(aircraft, data)
             else:
@@ -335,11 +351,16 @@ class Tcas(Thread):
         elif message.get("type") == MessageType.RESOLUTION_RESPONSE.name:
             data = message.get("data")
             aircraft = self.knownAircrafts[message.get('address')]  # type: Aircraft
-            print(f"Received RESOLUTION_RESPONSE from {aircraft.identification}: {data}")
+            # print(f"Received RESOLUTION_RESPONSE from {aircraft.identification}: {data}")
             if data["accept"] == True:
                 aircraft.advisory.isAccepted = True
             else:
                 pass
+        elif message.get("type") == MessageType.INTEROGATION.name:
+            aircraft = self.knownAircrafts[message.get('address')]  # type: Aircraft
+            self.sendLongSquitter(aircraft)
+        elif message.get("type") == MessageType.LONG_SQUITTER.name:
+            self.listenToSquitter(message)
 
     def checkResolutionRequest(self, aircraft, data):
         aircraft.type = AircraftCategory.RA
@@ -356,7 +377,22 @@ class Tcas(Thread):
         for k in TcasThresholds.keys():
             if k > self.ownPlane.alt:
                 tcasThreshold = TcasThresholds.get(k)
-        return tcasThreshold
+                return tcasThreshold
+
+    def interogate(self):
+        for ac in self.knownAircrafts.values():
+            if time.monotonic() - ac.lasUpdate > 5:
+                self.sendInterogation(ac)
+
+    def sendInterogation(self, aircraft):
+        message = json.dumps({"mode": MessageMode.SELECTIVE.name, "address": f"{self.aircraftIdentification}",
+                              "receiver": f"{aircraft.identification}",
+                              "type": MessageType.INTEROGATION.name,
+                              "data": {}})
+        self.client.publish(f"{MQTT_TCAS_CHANNEL}/{self.aircraftIdentification}", payload=message, qos=0, retain=False)
+        print(f"Sent INTEROGATION to {aircraft.identification}")
+
+
 
 
 
