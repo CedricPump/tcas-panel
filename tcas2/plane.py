@@ -1,5 +1,4 @@
 from enum import Enum
-
 import geopy
 import geopy.distance
 import time
@@ -20,7 +19,6 @@ class Transponder(Enum):
     ModeA = 0
     ModeC = 1
     ModeS = 2
-
 
 
 class Plane:
@@ -59,8 +57,6 @@ class Plane:
 
     def getAsDict(self):
         return {"alt": self.alt, "agl": self.alt_agl, "lat": self.lat, "long": self.long, "vs": self.vs, "gs": self.gs, "hdg": self.hdg}
-
-
 
 
 class PlaneDummy(Plane):

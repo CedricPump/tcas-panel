@@ -158,7 +158,6 @@ class UI(Thread):
         self.taraLabel["text"] = "text"
         self.taraLabel.configure(fg="black")
 
-
     def getPointDistAndBear(self, dist, bear):
         dist = dist / UI_DISPLAY_RANGE * UI_SIZE / 2
         centerpoint = [UI_SIZE / 2, UI_SIZE / 2]
@@ -191,7 +190,6 @@ class UI(Thread):
 
         self.displayVSIndicator()
         #self.showVSLimits2(-20, 20)
-
 
     def checkAdvisoryLevel(self):
         mostSevereAdv = None
@@ -251,7 +249,6 @@ class UI(Thread):
             b = centerpoint[1] - (UI_SIZE / 2 * 9.75 / 10 * (math.cos(angleInRad)))
             icon = self.canvas.create_line(a, b, x, y, fill="white")
             self.vsScale += [icon]
-
 
     def showVSLimits(self, min, max):
         if min == 0.0 and max == 0.0:
