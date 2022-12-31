@@ -24,9 +24,3 @@ if __name__ == "__main__":
             ui.dummyPlane.setPos(alt=args.alt, lat=args.lat, long=args.long, vs=args.vs, gs=args.gs, hdg=args.hdg)
 
     ui.run()
-
-
-
-
-
-
